@@ -19,7 +19,7 @@ import rateLimit from 'express-rate-limit';
     }
 ));
 
-
+  app.set('trust proxy', 1)
   const consultaRouter: Router = Router();
 
   const cpfLimiter = rateLimit({
