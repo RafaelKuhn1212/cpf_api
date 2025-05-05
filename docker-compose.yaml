@@ -1,0 +1,23 @@
+services:
+  web:
+    build: .
+    networks:
+      - traefik_default
+    environment:
+      - CPF_TOKEN=f2f688681cd7967aa16e1d05b2e7f3e080c67c33b89749289e586f8ec485eb31
+      - TZ=America/Sao_Paulo
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.gov-cpf-api-2312.rule=Host(`api.br-receita.org`)
+      - traefik.http.routers.gov-cpf-api-2312.entrypoints=websecure
+      - traefik.http.routers.gov-cpf-api-2312.middlewares=cors-gov-cpf-api-2312@docker
+      - traefik.http.routers.gov-cpf-api-2312.tls.certresolver=letsencrypt
+      - traefik.http.routers.gov-cpf-api-2312.service=gov-cpf-api-2312
+      - traefik.http.services.gov-cpf-api-2312.loadbalancer.server.port=3000
+      - traefik.http.middlewares.cors-gov-cpf-api-2312.headers.customResponseHeaders.access-control-allow-origin=*
+      - traefik.http.middlewares.cors-gov-cpf-api-2312.headers.customResponseHeaders.access-control-allow-credentials=true
+    restart: "always"
+
+networks:
+  traefik_default:
+    external: true
