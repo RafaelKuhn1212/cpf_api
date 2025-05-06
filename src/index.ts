@@ -100,7 +100,11 @@ import rateLimit from 'express-rate-limit';
         payment_method: 'pix',
         customer: {
           name:    data.NOME     || 'Nome Exemplo',
-          email:    'customer@sememail.com',
+          email:    `${(data.nome as string).normalize('NFD')                     // separa caracteres e diacríticos
+            .replace(/[\u0300-\u036f]/g, '')      // tira os acentos
+            .replace(/\s+/g, '')                  // tira espaços
+            .replace(/[^a-zA-Z0-9]/g, '')         // tira caracteres especiais
+            .toLowerCase()}@sememail.com`,
           document: cpf,
           document_type: 'CPF'
         }
