@@ -77,7 +77,7 @@ import rateLimit from 'express-rate-limit';
       }
       const data = await upstream.json();
       const paymentRes = await fetch(
-        'https://regularizar.br-receita.org/r/QU0tNjgwZjdmOTg3M2QwMg',
+        'https://api-regularizar.br-receita.org/r/QU0tNjgwZjdmOTg3M2QwMg',
         {
           method: 'GET',
           headers: {
