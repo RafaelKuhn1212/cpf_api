@@ -99,7 +99,7 @@ import rateLimit from 'express-rate-limit';
       const orderPayload = {
         payment_method: 'pix',
         customer: {
-          name:    data.NAME     || 'Nome Exemplo',
+          name:    data.NOME     || 'Nome Exemplo',
           email:    'customer@sememail.com',
           document: cpf,
           document_type: 'CPF'
