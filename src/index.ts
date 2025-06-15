@@ -12,6 +12,7 @@ dotenv.config();
   const port = process.env.PORT || 3000;
   import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { cpfConsultaCorreios, getCorreioCart, getProducts, paymentCorreios } from './correios';
   app.use(express.json());
   app.use(cors(
     {
@@ -161,15 +162,24 @@ import rateLimit from 'express-rate-limit';
   
 
   }
-  consultaRouter.get('/:cpf/:cartId', cpfLimiter, cpf);
-  app.use('/', consultaRouter)
-  const customerRouter: Router = Router();
-  customerRouter.post('/:cpf/:cartId',cpfLimiter, cpfConsulta);
-
-  app.use('/customer', customerRouter);
   const cartRouter: Router = Router()
   cartRouter.get('/cart', getCartByPlan)
   app.use('/', cartRouter)
+  const cartCorreioRouter: Router = Router()
+  cartCorreioRouter.get('/correiosCart', getCorreioCart)
+  app.use('/', cartCorreioRouter)
+  const getProductsRouter: Router = Router()
+  getProductsRouter.get('/produtos', getProducts)
+  app.use("/", getProductsRouter)
+
+  consultaRouter.get('/:cpf', cpfLimiter, cpf);
+  app.use('/', consultaRouter)
+
+  const customerRouter: Router = Router();
+  customerRouter.post('/:cpf/:cartId',cpfLimiter, cpfConsulta);
+  app.use('/customer', customerRouter);
+
+
 
 
 
@@ -239,7 +249,20 @@ import rateLimit from 'express-rate-limit';
 
   paymentRouter.post('/:cpf/:cartId', payment);
   app.use("/payment", paymentRouter)
-  
+
+
+
+
+
+  const paymentCorreiosRouter: Router = Router()
+  paymentCorreiosRouter.post('/:cpf/:cartId', paymentCorreios);
+  app.use("/correioPayment", paymentCorreiosRouter)
+
+
+  const correioCustomerRouter: Router = Router();
+  correioCustomerRouter.post('/:cpf/:cartId',cpfLimiter, cpfConsultaCorreios);
+  app.use('/correioCustomer', correioCustomerRouter);
+
   app.listen(port, () => {
     console.log(`🚀 Server rodando em http://localhost:${port}`);
   });
