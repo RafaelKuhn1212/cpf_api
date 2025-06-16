@@ -23,7 +23,19 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
       let token = data.access_token
       const tenantId = '1aa1ae14-1f87-4ac4-90e6-099c8ef4468e'
       
-      
+      const changeStore = await fetch('https://api.ameii.com.br/api/store/change' + `/${tenantId}`, { method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+       
+       });
+      if (!changeStore.ok) {
+        return res
+          .status(changeStore.status)
+          .json({ error: `changeStore retornou ${changeStore.status}` });
+      }
+      const newData = await changeStore.json();
+      token = newData.access_token
       const upstream2 = await fetch('https://api.ameii.com.br/api/product', { method: 'GET',
         headers: {
           'Content-Type': 'application/json',
