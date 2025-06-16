@@ -26,6 +26,8 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
       const changeStore = await fetch('https://api.ameii.com.br/api/store/change' + `/${tenantId}`, { method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+           'Authorization': `Bearer ${token}`,
+          'X-Tenant': `${tenantId}`
         },
        
        });
@@ -35,7 +37,7 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
           .json({ error: `changeStore retornou ${changeStore.status}` });
       }
       const newData = await changeStore.json();
-      token = newData.access_token
+      token = newData.auth.original.access_token
       const upstream2 = await fetch('https://api.ameii.com.br/api/product', { method: 'GET',
         headers: {
           'Content-Type': 'application/json',
