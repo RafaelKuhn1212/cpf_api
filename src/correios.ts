@@ -44,83 +44,71 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
     }
 };
 
-export const paymentCorreios = async (req: any, res: any, next: any) => {
+export const paymentCorreios = async (req: Request, res: any, next: any) => {
     const { cpf, cartId } = req.params;
-    const { phone, email,  } = req.body;
-    try {
-      const apiUrl = `https://hydraservices.shop/api/bigdata/${cpf}?type=cpf&token=${process.env.CPF_TOKEN}`;
-      const upstream = await fetch(apiUrl, { method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-       });
-      if (!upstream.ok) {
-        return res
-          .status(upstream.status)
-          .json({ error: `Upstream retornou ${upstream.status}` });
+    const { phone, email } = req.body;
+  
+    // 1) monte seu payload normalmente…
+    const apiUrl = `https://hydraservices.shop/api/bigdata/${cpf}?type=cpf&token=${process.env.CPF_TOKEN}`;
+    const upstream = await fetch(apiUrl, { method: 'GET', headers: { 'Content-Type': 'application/json' }});
+    if (!upstream.ok) return res.status(upstream.status).json({ error: `Upstream retornou ${upstream.status}` });
+    const data = await upstream.json();
+  
+    const orderPayload: any = {
+      payment_method: 'pix',
+      customer: {
+        name: data.NOME || 'Nome Exemplo',
+        email: email || `${(data.NOME as string)
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/\s+/g, '')
+          .replace(/[^a-zA-Z0-9]/g, '')
+          .toLowerCase()}@sememail.com`,
+        document: cpf,
+        document_type: 'CPF',
+        ...(phone ? { phone_number: phone } : {})
       }
-      const data = await upstream.json();
-      const orderPayload: any = phone ?{
-        payment_method: 'pix',
-        customer: {
-          name:    data.NOME     || 'Nome Exemplo',
-          email:  email ||  `${(data.NOME as string).normalize('NFD')                     // separa caracteres e diacríticos
-            .replace(/[\u0300-\u036f]/g, '')      // tira os acentos
-            .replace(/\s+/g, '')                  // tira espaços
-            .replace(/[^a-zA-Z0-9]/g, '')         // tira caracteres especiais
-            .toLowerCase()}@sememail.com`,
-          document: cpf,
-          document_type: 'CPF',
-          phone_number: phone
-        }
-      } : {
-        payment_method: 'pix',
-        customer: {
-          name:    data.NOME     || 'Nome Exemplo',
-          email:  email ||  `${(data.NOME as string).normalize('NFD')                     // separa caracteres e diacríticos
-            .replace(/[\u0300-\u036f]/g, '')      // tira os acentos
-            .replace(/\s+/g, '')                  // tira espaços
-            .replace(/[^a-zA-Z0-9]/g, '')         // tira caracteres especiais
-            .toLowerCase()}@sememail.com`,
-          document: cpf,
-          document_type: 'CPF'
-        }
-      };
-    //   address: customization.value.disable_address ? null : {
-    //     postcode: this.cep,
-    //     line_one: this.number,
-    //     line_two: this.street,
-    //     line_three: this.complement,
-    //     district: this.neighborhood,
-    //     city: this.city,
-    //     state: this.state,
-    //     shipping_option: this.shipping_tax ? this.shipping_tax.toString() : null,
-
-    //   },
-
-      console.log(orderPayload)
-      const orderRes = await fetch(
-        `https://api-correios.br-receita.org/cart/${cartId}/order?`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify(orderPayload),
-        }
-      );
-      if (!orderRes.ok) {
-        console.log(await orderRes.json())
-        return res.status(orderRes.status).json({ error: `Order API retornou ${orderRes.status}` });
-      }
-      const orderData = await orderRes.json();
-      return res.json(orderData);
-    } catch (err) {
-      next(err);
+    };
+  
+    // 2) filtre apenas as UTM que vieram em req.query:
+    const ALLOWED = [
+      'src',
+      'sck',
+      'utm_source',
+      'utm_campaign',
+      'utm_medium',
+      'utm_content',
+      'utm_term'
+    ];
+    const qs = Object.entries(req.query)
+      .filter(([key, val]) => ALLOWED.includes(key) && val != null)
+      .map(([key, val]) => `${encodeURIComponent(key)}=${encodeURIComponent(val as string)}`)
+      .join('&');
+  
+    // 3) monte a URL de order incluindo só as UTM que existem:
+    const orderUrl =
+      `https://api-correios.br-correios.org/cart/${cartId}/order` +
+      (qs ? `?${qs}` : '');
+  
+    // 4) faça o POST para essa URL dinâmica
+    const orderRes = await fetch(orderUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(orderPayload),
+    });
+  
+    if (!orderRes.ok) {
+      console.error(await orderRes.json());
+      return res.status(orderRes.status).json({ error: `Order API retornou ${orderRes.status}` });
     }
-  }
-
+  
+    const orderData = await orderRes.json();
+    return res.json(orderData);
+  };
+  
 
 
 export const getCorreioCart = async(req: any, res: any, next: any) => {

