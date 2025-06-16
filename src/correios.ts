@@ -38,8 +38,7 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
       }
      
       const data2 = await upstream2.json();
-      console.log(data2)
-      return res.json(data2.data.filter((p: any) => p.name !== 'Taxa Alfandegária'))
+      return res.json(data2.data.filter((p: any) => p.id !== 61084 && p.id !== 61086))
     } catch (err) {
       console.log(err)
     }
@@ -125,19 +124,22 @@ export const paymentCorreios = async (req: any, res: any, next: any) => {
 
 
 export const getCorreioCart = async(req: any, res: any, next: any) => {
-   
+    let productId = 'QU0tNjg0ZjIyYjczOWQ1MQ'
+   if(req.query.productId) {
+       productId = req.query.productId
+   }
     try {
       const paymentRes = await fetch(
-        'https://api-correios.br-receita.org/r/QU0tNjg0ZjIyYjczOWQ1MQ',
+        `https://api-correios.br-receita.org/r/${productId}`,
         {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
-          
+            'Content-Type': 'application/json',
           }
         }
       );
-     console.log(paymentRes)
+
       if (!paymentRes.ok) {
         return res
           .status(paymentRes.status)

