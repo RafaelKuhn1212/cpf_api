@@ -4,7 +4,7 @@ services:
     networks:
       - traefik_default
     environment:
-      - CPF_TOKEN=apihydra-hcghfelj-xh4uv5sc
+      - CPF_TOKEN=apihydra-e765d76o-i445a3yv
       - TZ=America/Sao_Paulo
     labels:
       - traefik.enable=true
