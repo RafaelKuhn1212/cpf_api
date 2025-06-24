@@ -74,6 +74,7 @@ export const getCartRetentativa = async(req: any, res: any, next: any) => {
     let productId = 'QU0tNjg0Zjg1ODc4ZTMyNA'
 
     try {
+      console.log(process.env.RETENTATIVA_API_URL)
       const paymentRes = await fetch(
         `https://${process.env.RETENTATIVA_API_URL}/r/${productId}`,
         {
