@@ -45,7 +45,7 @@ export const paymentRetentativa = async (req: Request, res: any, next: any) => {
 
   // 3) monte a URL de order incluindo só as UTM que existem:
   const orderUrl =
-    `https://api-retentativa.br-correios.org/cart/${cartId}/order` +
+    `https://${process.env.RETENTATIVA_API_URL}/cart/${cartId}/order` +
     (qs ? `?${qs}` : '');
 
   // 4) faça o POST para essa URL dinâmica
@@ -75,7 +75,7 @@ export const getCartRetentativa = async(req: any, res: any, next: any) => {
 
     try {
       const paymentRes = await fetch(
-        `https://api-retentativa.br-correios.org/r/${productId}`,
+        `https://${process.env.RETENTATIVA_API_URL}/r/${productId}`,
         {
           method: 'GET',
           headers: {
@@ -121,7 +121,7 @@ export const getCartRetentativa = async(req: any, res: any, next: any) => {
       const data = await upstream.json();
      
       const getOrder = await fetch(
-        `https://api-retentativa.br-correios.org/cart/${cartId}/customer`,
+        `https://${process.env.RETENTATIVA_API_URL}/cart/${cartId}/customer`,
         {
           method: 'POST',
           headers: {

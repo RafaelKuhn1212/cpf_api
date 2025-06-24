@@ -101,7 +101,7 @@ export const paymentCorreios = async (req: Request, res: any, next: any) => {
   
     // 3) monte a URL de order incluindo só as UTM que existem:
     const orderUrl =
-      `https://api-correios.br-correios.org/cart/${cartId}/order` +
+      `https://${process.env.CORREIO_API_URL}/cart/${cartId}/order` +
       (qs ? `?${qs}` : '');
   
     // 4) faça o POST para essa URL dinâmica
